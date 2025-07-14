@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
-import { Skeleton } from '@/components/ui/skeleton'; // Pour un état de chargement visuel
+import { Skeleton } from '@/components/ui/skeleton'; // For a visual loading state
 
 interface Creator {
   id: string;
@@ -17,18 +17,18 @@ export default function DashboardPage() {
   const [session, setSession] = useState<any>(null);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addingCreator, setAddingCreator] = useState(false); // État pour le bouton "Ajouter un créateur"
+  const [addingCreator, setAddingCreator] = useState(false); // Loading state for "Add Creator" button
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Écouteur de session Supabase
+    // Supabase session listener
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
         fetchCreators(session.user.id);
       } else {
         setLoading(false);
-        navigate('/'); // Rediriger si pas de session
+        navigate('/'); // Redirect if no session
       }
     });
 
@@ -40,19 +40,19 @@ export default function DashboardPage() {
         } else {
           setCreators([]);
           setLoading(false);
-          navigate('/'); // Rediriger si la session est terminée
+          navigate('/'); // Redirect if session ends
         }
       }
     );
 
-    // Gérer les paramètres d'URL après le retour de l'Edge Function
+    // Handle URL parameters after returning from the Edge Function
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('creator_added') === 'true') {
-      alert('Créateur ajouté avec succès !');
-      // Nettoyer l'URL
+      alert('Creator added successfully!');
+      // Clean up the URL
       navigate('/dashboard', { replace: true });
     } else if (urlParams.get('creator_added') === 'false' && urlParams.get('error') === 'true') {
-      alert('Erreur lors de l\'ajout du créateur. Veuillez réessayer.');
+      alert('Error adding creator. Please try again.');
       navigate('/dashboard', { replace: true });
     }
 
@@ -63,15 +63,15 @@ export default function DashboardPage() {
 
   const fetchCreators = async (userId: string) => {
     setLoading(true);
-    // Récupérer les créateurs associés à l'ID de l'utilisateur connecté
+    // Retrieve creators associated with the logged-in user's ID
     const { data, error } = await supabase
       .from('creators')
       .select('*')
-      .eq('user_id', userId); // Filtrer par l'ID du manager
+      .eq('user_id', userId); // Filter by manager's ID
 
     if (error) {
-      console.error('Erreur lors de la récupération des créateurs:', error.message);
-      alert('Erreur lors du chargement des créateurs.');
+      console.error('Error fetching creators:', error.message);
+      alert('Error loading creators.');
     } else {
       setCreators(data || []);
     }
@@ -85,52 +85,51 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  // --- Fonction pour Connecter un Compte Gmail de CRÉATEUR ---
+  // --- Function to Connect a Creator's Gmail Account ---
   const handleCreatorGmailConnect = () => {
     if (!session || !session.user || !session.user.id) {
-      alert("Vous devez être connecté pour ajouter un créateur.");
-      navigate('/'); // Rediriger vers la page de connexion
+      alert("You must be logged in to add a creator.");
+      navigate('/'); // Redirect to login page
       return;
     }
 
-    setAddingCreator(true); // Activer l'état de chargement du bouton
+    setAddingCreator(true); // Activate loading state for the button
 
     const managerUserId = session.user.id;
     console.log('Manager User ID for creator flow:', managerUserId);
 
-    // Les scopes nécessaires pour Gmail API
+    // Required scopes for Gmail API
     const scopes = encodeURIComponent('https://www.googleapis.com/auth/gmail.modify');
 
-    // L'ID Client de Google Cloud pour le flux créateur (celui configuré pour l'Edge Function callback)
-    // Idéalement, cela devrait venir d'une variable d'environnement frontend
-    // Pour l'instant, utilisez la valeur que vous avez mise dans AuthTestPage.tsx
-    const GOOGLE_CLIENT_ID_CREATOR_FRONTEND = import.meta.env.VITE_GOOGLE_CLIENT_ID_CREATOR_FLOW; // Assurez-vous que cette variable est définie dans .env.local
+    // Google Cloud Client ID for the creator flow (configured for the Edge Function callback)
+    const GOOGLE_CLIENT_ID_CREATOR_FRONTEND = import.meta.env.VITE_GOOGLE_CLIENT_ID_CREATOR_FLOW;
 
-    // L'URL de redirection doit être l'URL PUBLIQUE de votre Edge Function handle-gmail-oauth-callback
-    const REDIRECT_URI_CREATOR = import.meta.env.VITE_GOOGLE_REDIRECT_URI_CREATOR; // Assurez-vous que cette variable est définie dans .env.local
+    // The redirect URL must be the PUBLIC URL of your handle-gmail-oauth-callback Edge Function
+    const REDIRECT_URI_CREATOR = import.meta.env.VITE_GOOGLE_REDIRECT_URI_CREATOR;
 
     if (!GOOGLE_CLIENT_ID_CREATOR_FRONTEND || !REDIRECT_URI_CREATOR) {
-      alert("Erreur de configuration: Clés Google ou URL de redirection manquantes pour le flux créateur.");
+      alert("Configuration error: Missing Google keys or redirect URL for creator flow.");
       setAddingCreator(false);
       return;
     }
 
-    // Construire l'URL d'autorisation Google OAuth
+    // Construct the Google OAuth authorization URL
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `scope=${scopes}&` +
-      `access_type=offline&` + // Très important pour obtenir un refresh_token
+      `access_type=offline&` + // Crucial for obtaining a refresh_token
       `include_granted_scopes=true&` +
       `response_type=code&` +
-      `state=${managerUserId}&` + // Passer l'ID du manager dans le paramètre 'state'
+      `state=${managerUserId}&` + // Pass the manager's ID in the 'state' parameter
       `redirect_uri=${encodeURIComponent(REDIRECT_URI_CREATOR)}&` +
-      `client_id=${GOOGLE_CLIENT_ID_CREATOR_FRONTEND}`;
+      `client_id=${GOOGLE_CLIENT_ID_CREATOR_FRONTEND}&` +
+      `prompt=consent`; // <-- ADD THIS LINE TO FORCE RE-CONSENT AND GET A REFRESH TOKEN
 
-    // Rediriger le navigateur vers l'URL d'autorisation Google
+    // Redirect the browser to the Google authorization URL
     window.location.href = authUrl;
   };
 
   if (!session) {
-    // Si la session n'est pas encore chargée ou n'existe pas, afficher un squelette ou rediriger
+    // If session is not yet loaded or doesn't exist, show a skeleton or redirect
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <Skeleton className="w-full max-w-md h-64 rounded-lg shadow-lg" />
@@ -141,11 +140,11 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <header className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-extrabold text-gray-900">Tableau de Bord</h1>
+        <h1 className="text-4xl font-extrabold text-gray-900">Dashboard</h1>
         <div className="flex items-center space-x-4">
-          <span className="text-lg text-gray-700">Connecté en tant que: <span className="font-semibold">{session.user.email}</span></span>
+          <span className="text-lg text-gray-700">Logged in as: <span className="font-semibold">{session.user.email}</span></span>
           <Button onClick={handleSignOut} disabled={loading} variant="destructive" className="rounded-md">
-            {loading ? 'Déconnexion...' : 'Se déconnecter'}
+            Sign Out
           </Button>
         </div>
       </header>
@@ -153,7 +152,7 @@ export default function DashboardPage() {
       <section className="mb-8">
         <Card className="p-6 rounded-lg shadow-md">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold text-gray-800">Gérer les Créateurs</CardTitle>
+            <CardTitle className="text-2xl font-bold text-gray-800">Manage Creators</CardTitle>
           </CardHeader>
           <CardContent>
             <Button
@@ -161,10 +160,10 @@ export default function DashboardPage() {
               disabled={addingCreator}
               className="w-full sm:w-auto p-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
             >
-              {addingCreator ? 'Redirection Google...' : 'Ajouter un nouveau Créateur (Connecter Gmail)'}
+              {addingCreator ? 'Redirecting to Google...' : 'Add New Creator (Connect Gmail)'}
             </Button>
 
-            <h3 className="text-xl font-semibold mt-8 mb-4 text-gray-800">Vos Créateurs Actuels</h3>
+            <h3 className="text-xl font-semibold mt-8 mb-4 text-gray-800">Your Current Creators</h3>
             {loading ? (
               <div className="space-y-4">
                 <Skeleton className="h-12 w-full rounded-md" />
@@ -172,7 +171,7 @@ export default function DashboardPage() {
                 <Skeleton className="h-12 w-full rounded-md" />
               </div>
             ) : creators.length === 0 ? (
-              <p className="text-gray-600">Vous n'avez pas encore de créateurs connectés. Ajoutez-en un pour commencer !</p>
+              <p className="text-gray-600">You don't have any connected creators yet. Add one to get started!</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {creators.map((creator) => (
@@ -180,10 +179,10 @@ export default function DashboardPage() {
                     <CardTitle className="text-lg font-semibold mb-2">{creator.name}</CardTitle>
                     <p className="text-gray-700 text-sm mb-1">Email: {creator.email_address}</p>
                     <p className={`text-sm font-medium ${creator.status === 'active' ? 'text-green-600' : 'text-yellow-600'}`}>
-                      Statut: {creator.status.charAt(0).toUpperCase() + creator.status.slice(1)}
+                      Status: {creator.status.charAt(0).toUpperCase() + creator.status.slice(1)}
                     </p>
-                    <p className="text-xs text-gray-500 mt-2">Ajouté le: {new Date(creator.created_at).toLocaleDateString()}</p>
-                    {/* Ajoutez ici d'autres actions comme "Voir les conversations", "Désactiver", etc. */}
+                    <p className="text-xs text-gray-500 mt-2">Added on: {new Date(creator.created_at).toLocaleDateString()}</p>
+                    {/* Add other actions here like "View Conversations", "Deactivate", etc. */}
                   </Card>
                 ))}
               </div>
