@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
-import AuthPage from './pages/AuthPage'; // Nouvelle page d'authentification
-import DashboardPage from './pages/DashboardPage'; // Nouvelle page de tableau de bord
-import { supabase } from './lib/supabase'; // Votre client Supabase
-import { Skeleton } from '@/components/ui/skeleton'; // Pour un état de chargement
+import AuthPage from './pages/AuthPage';
+import DashboardPage from './pages/DashboardPage';
+import OnboardingPage from './pages/OnboardingPage';
+import UserPage from './pages/UserPage';
+import CreatorPage from './pages/CreatorPage';
+import AddCreatorPage from './pages/AddCreatorPage';
+import { supabase } from './lib/supabase';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Composant pour gérer le callback OAuth de Supabase (pour l'authentification du MANAGER)
 function AuthCallbackHandler() {
@@ -115,7 +119,7 @@ function App() {
         {/* Route pour le callback OAuth de Supabase (pour l'authentification du manager) */}
         <Route path="/auth/callback" element={<AuthCallbackHandler />} />
 
-        {/* Route protégée pour le tableau de bord */}
+        {/* Routes protégées */}
         <Route
           path="/dashboard"
           element={
@@ -124,7 +128,38 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Vous pouvez ajouter d'autres routes protégées ici */}
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <OnboardingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/user"
+          element={
+            <ProtectedRoute>
+              <UserPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/creator/:id"
+          element={
+            <ProtectedRoute>
+              <CreatorPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/add-creator"
+          element={
+            <ProtectedRoute>
+              <AddCreatorPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );

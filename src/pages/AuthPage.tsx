@@ -10,7 +10,22 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
   const navigate = useNavigate();
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+    if (error) {
+      alert(error.message);
+    } else {
+      alert('Check your email for the password reset link!');
+    }
+    setLoading(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,51 +67,86 @@ export default function AuthPage() {
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-extrabold text-gray-900">Bienvenue sur FireName</CardTitle>
           <CardDescription className="text-gray-600">
-            {isSignUp ? "Créez votre compte manager" : "Connectez-vous à votre compte manager"}
+            {forgotPassword
+              ? 'Reset your password'
+              : isSignUp
+              ? 'Créez votre compte manager'
+              : 'Connectez-vous à votre compte manager'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Votre Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Votre Mot de Passe"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <Button type="submit" disabled={loading} className="w-full p-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200">
-              {loading ? (isSignUp ? 'Inscription...' : 'Connexion...') : (isSignUp ? 'S\'inscrire' : 'Se connecter')}
-            </Button>
-          </form>
+          {forgotPassword ? (
+            <form onSubmit={handleForgotPassword} className="space-y-6">
+              <div>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Votre Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <Button type="submit" disabled={loading} className="w-full p-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200">
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Votre Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Votre Mot de Passe"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <Button type="submit" disabled={loading} className="w-full p-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200">
+                {loading ? (isSignUp ? 'Inscription...' : 'Connexion...') : isSignUp ? "S'inscrire" : 'Se connecter'}
+              </Button>
+            </form>
+          )}
           <div className="mt-6 text-center text-sm text-gray-600">
-            {isSignUp ? (
-              <>
-                Vous avez déjà un compte ?{' '}
-                <Button variant="link" onClick={() => setIsSignUp(false)} className="p-0 h-auto text-blue-600 hover:underline">
-                  Connectez-vous
-                </Button>
-              </>
+            {forgotPassword ? (
+              <Button variant="link" onClick={() => setForgotPassword(false)} className="p-0 h-auto text-blue-600 hover:underline">
+                Back to login
+              </Button>
             ) : (
               <>
-                Pas encore de compte ?{' '}
-                <Button variant="link" onClick={() => setIsSignUp(true)} className="p-0 h-auto text-blue-600 hover:underline">
-                  Inscrivez-vous
-                </Button>
+                {isSignUp ? (
+                  <>
+                    Vous avez déjà un compte ?{' '}
+                    <Button variant="link" onClick={() => setIsSignUp(false)} className="p-0 h-auto text-blue-600 hover:underline">
+                      Connectez-vous
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    Pas encore de compte ?{' '}
+                    <Button variant="link" onClick={() => setIsSignUp(true)} className="p-0 h-auto text-blue-600 hover:underline">
+                      Inscrivez-vous
+                    </Button>
+                    <span className="mx-2">|</span>
+                    <Button variant="link" onClick={() => setForgotPassword(true)} className="p-0 h-auto text-blue-600 hover:underline">
+                      Forgot Password?
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </div>

@@ -3,7 +3,11 @@ import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
-import { Skeleton } from '@/components/ui/skeleton'; // For a visual loading state
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface Creator {
   id: string;
@@ -17,7 +21,6 @@ export default function DashboardPage() {
   const [session, setSession] = useState<any>(null);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addingCreator, setAddingCreator] = useState(false); // Loading state for "Add Creator" button
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,17 +47,6 @@ export default function DashboardPage() {
         }
       }
     );
-
-    // Handle URL parameters after returning from the Edge Function
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('creator_added') === 'true') {
-      alert('Creator added successfully!');
-      // Clean up the URL
-      navigate('/dashboard', { replace: true });
-    } else if (urlParams.get('creator_added') === 'false' && urlParams.get('error') === 'true') {
-      alert('Error adding creator. Please try again.');
-      navigate('/dashboard', { replace: true });
-    }
 
     return () => {
       authListener?.unsubscribe();
@@ -85,49 +77,6 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  // --- Function to Connect a Creator's Gmail Account ---
-  const handleCreatorGmailConnect = () => {
-    if (!session || !session.user || !session.user.id) {
-      alert("You must be logged in to add a creator.");
-      navigate('/'); // Redirect to login page
-      return;
-    }
-
-    setAddingCreator(true); // Activate loading state for the button
-
-    const managerUserId = session.user.id;
-    console.log('Manager User ID for creator flow:', managerUserId);
-
-    // Required scopes for Gmail API
-    const scopes = encodeURIComponent('https://www.googleapis.com/auth/gmail.modify');
-
-    // Google Cloud Client ID for the creator flow (configured for the Edge Function callback)
-    const GOOGLE_CLIENT_ID_CREATOR_FRONTEND = import.meta.env.VITE_GOOGLE_CLIENT_ID_CREATOR_FLOW;
-
-    // The redirect URL must be the PUBLIC URL of your handle-gmail-oauth-callback Edge Function
-    const REDIRECT_URI_CREATOR = import.meta.env.VITE_GOOGLE_REDIRECT_URI_CREATOR;
-
-    if (!GOOGLE_CLIENT_ID_CREATOR_FRONTEND || !REDIRECT_URI_CREATOR) {
-      alert("Configuration error: Missing Google keys or redirect URL for creator flow.");
-      setAddingCreator(false);
-      return;
-    }
-
-    // Construct the Google OAuth authorization URL
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `scope=${scopes}&` +
-      `access_type=offline&` + // Crucial for obtaining a refresh_token
-      `include_granted_scopes=true&` +
-      `response_type=code&` +
-      `state=${managerUserId}&` + // Pass the manager's ID in the 'state' parameter
-      `redirect_uri=${encodeURIComponent(REDIRECT_URI_CREATOR)}&` +
-      `client_id=${GOOGLE_CLIENT_ID_CREATOR_FRONTEND}&` +
-      `prompt=consent`; // <-- ADD THIS LINE TO FORCE RE-CONSENT AND GET A REFRESH TOKEN
-
-    // Redirect the browser to the Google authorization URL
-    window.location.href = authUrl;
-  };
-
   if (!session) {
     // If session is not yet loaded or doesn't exist, show a skeleton or redirect
     return (
@@ -150,42 +99,61 @@ export default function DashboardPage() {
       </header>
 
       <section className="mb-8">
-        <Card className="p-6 rounded-lg shadow-md">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-gray-800">Manage Creators</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Manage Creators</CardTitle>
+            <Button onClick={() => navigate('/add-creator')}>Add Creator</Button>
           </CardHeader>
           <CardContent>
-            <Button
-              onClick={handleCreatorGmailConnect}
-              disabled={addingCreator}
-              className="w-full sm:w-auto p-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors duration-200"
-            >
-              {addingCreator ? 'Redirecting to Google...' : 'Add New Creator (Connect Gmail)'}
-            </Button>
-
-            <h3 className="text-xl font-semibold mt-8 mb-4 text-gray-800">Your Current Creators</h3>
             {loading ? (
               <div className="space-y-4">
                 <Skeleton className="h-12 w-full rounded-md" />
                 <Skeleton className="h-12 w-full rounded-md" />
                 <Skeleton className="h-12 w-full rounded-md" />
               </div>
-            ) : creators.length === 0 ? (
-              <p className="text-gray-600">You don't have any connected creators yet. Add one to get started!</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {creators.map((creator) => (
-                  <Card key={creator.id} className="p-4 rounded-lg shadow-sm border border-gray-200">
-                    <CardTitle className="text-lg font-semibold mb-2">{creator.name}</CardTitle>
-                    <p className="text-gray-700 text-sm mb-1">Email: {creator.email_address}</p>
-                    <p className={`text-sm font-medium ${creator.status === 'active' ? 'text-green-600' : 'text-yellow-600'}`}>
-                      Status: {creator.status.charAt(0).toUpperCase() + creator.status.slice(1)}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-2">Added on: {new Date(creator.created_at).toLocaleDateString()}</p>
-                    {/* Add other actions here like "View Conversations", "Deactivate", etc. */}
-                  </Card>
-                ))}
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Added On</TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {creators.map((creator) => (
+                    <TableRow key={creator.id}>
+                      <TableCell className="font-medium">{creator.name}</TableCell>
+                      <TableCell>{creator.email_address}</TableCell>
+                      <TableCell>
+                        <Badge variant={creator.status === 'active' ? 'default' : 'secondary'}>
+                          {creator.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{new Date(creator.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => navigate(`/creator/${creator.id}`)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem>Deactivate</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
@@ -193,3 +161,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
