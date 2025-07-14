@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface Creator {
   id: string;
@@ -91,10 +92,32 @@ export default function DashboardPage() {
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-extrabold text-gray-900">Dashboard</h1>
         <div className="flex items-center space-x-4">
-          <span className="text-lg text-gray-700">Logged in as: <span className="font-semibold">{session.user.email}</span></span>
-          <Button onClick={handleSignOut} disabled={loading} variant="destructive" className="rounded-md">
-            Sign Out
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src="/avatars/01.png" alt="@shadcn" />
+                  <AvatarFallback>{session.user.email ? session.user.email.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{session.user.email}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {session.user.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => navigate('/user')}>
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSignOut}>
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

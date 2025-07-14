@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,6 +14,7 @@ export default function CreatorPage() {
   const { id } = useParams();
   const [creator, setCreator] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchCreator = async () => {
@@ -114,6 +115,10 @@ export default function CreatorPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+      <div className="flex justify-end space-x-4 mt-8">
+        <Button variant="outline" onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+        <Button onClick={() => alert('Save changes functionality coming soon!')}>Save Changes</Button>
       </div>
     </div>
   );
