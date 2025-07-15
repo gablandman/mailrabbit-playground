@@ -78,19 +78,26 @@ serve(async (req) => {
         //     return new Response('Quota exceeded', { status: 403 });
         // }
 
-        // 3. (Placeholder) Appeler l'API Gmail pour récupérer le contenu de l'email
-        // Cette partie sera plus complexe et nécessitera de générer un access_token à partir du refresh_token.
-        // Pour le MVP, nous allons simuler un appel.
+        // 3. Appeler l'API Gmail pour récupérer le contenu de l'email
         console.log(`Tentative de récupération des nouveaux emails pour ${creator.email_address}...`);
-        // const newEmails = await getNewEmails(creator.gmail_refresh_token, historyId); // Fonction à implémenter
-        const mockNewEmails = [{
-            id: 'mock_email_id_123',
-            subject: 'Nouvelle proposition de partenariat',
-            from: 'marque@exemple.com',
-            body: 'Cher créateur, nous serions ravis de collaborer avec vous...',
-            thread_id: 'mock_thread_id_456'
-        }]; // Simulation
+        const accessToken = await getGmailAccessToken(creator.gmail_refresh_token);
+        if (!accessToken) {
+            console.error(`Could not get access token for ${creator.email_address}.`);
+            return new Response('Failed to get Gmail access token', { status: 200 });
+        }
 
+        const { emails: newEmails, newHistoryId } = await getNewEmails(accessToken, creator.email_address, historyId);
+
+        // Update the creator's gmail_history_id with the latest one
+        if (newHistoryId && newHistoryId !== creator.gmail_history_id) {
+            const { error: updateError } = await supabaseAdmin
+                .from('creators')
+                .update({ gmail_history_id: newHistoryId })
+                .eq('id', creator.id);
+            if (updateError) {
+                console.error('Error updating creator history ID:', updateError.message);
+            }
+        }
 
         // 4. Préparer le payload pour n8n
         const n8nPayload = {
@@ -98,7 +105,7 @@ serve(async (req) => {
             creator_email: creator.email_address,
             automation_mode: creator.automation_mode || 'assistant', // Assurez-vous que cette colonne existe
             // context_pool: await getContextForCreator(creator.id), // Fetch context du DB - À implémenter plus tard
-            emails: mockNewEmails,
+            emails: newEmails,
             // Ajoutez ici toute autre information nécessaire pour n8n
         };
 
@@ -135,15 +142,109 @@ serve(async (req) => {
     }
 });
 
-// --- Fonctions utilitaires (à implémenter complètement plus tard) ---
+// --- Utility Functions ---
 
-// async function getNewEmails(refreshToken: string, historyId: string): Promise<any[]> {
-//   // Ici, vous utiliserez le refreshToken pour obtenir un nouvel access_token,
-//   // puis appellerez l'API Gmail pour récupérer les messages depuis historyId.
-//   // C'est une logique complexe qui sera développée plus tard.
-//   console.warn("getNewEmails n'est pas encore implémenté.");
-//   return [];
-// }
+async function getGmailAccessToken(refreshToken: string): Promise<string | null> {
+    const GOOGLE_CLIENT_ID_SERVER = Deno.env.get('GOOGLE_CLIENT_ID_SERVER');
+    const GOOGLE_CLIENT_SECRET_SERVER = Deno.env.get('GOOGLE_CLIENT_SECRET_SERVER');
+
+    if (!GOOGLE_CLIENT_ID_SERVER || !GOOGLE_CLIENT_SECRET_SERVER) {
+        console.error('Missing Google server environment variables.');
+        return null;
+    }
+
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            client_id: GOOGLE_CLIENT_ID_SERVER,
+            client_secret: GOOGLE_CLIENT_SECRET_SERVER,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+        }).toString(),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error refreshing Gmail access token:', errorText);
+        return null;
+    }
+
+    const data = await response.json();
+    return data.access_token;
+}
+
+async function getNewEmails(accessToken: string, emailAddress: string, historyId: string): Promise<{ emails: any[], newHistoryId: string }> {
+    const emails: any[] = [];
+    let currentHistoryId = historyId;
+
+    try {
+        const historyResponse = await fetch(
+            `https://www.googleapis.com/gmail/v1/users/${emailAddress}/history?startHistoryId=${historyId}&historyTypes=messageAdded`,
+            {
+                headers: { 'Authorization': `Bearer ${accessToken}` },
+            }
+        );
+
+        if (!historyResponse.ok) {
+            const errorText = await historyResponse.text();
+            console.error('Error fetching Gmail history:', errorText);
+            return { emails: [], newHistoryId: historyId };
+        }
+
+        const historyData = await historyResponse.json();
+        currentHistoryId = historyData.historyId || historyId; // Update history ID
+
+        if (historyData.history) {
+            for (const historyRecord of historyData.history) {
+                if (historyRecord.messagesAdded) {
+                    for (const messageAdded of historyRecord.messagesAdded) {
+                        const messageId = messageAdded.message.id;
+                        const messageResponse = await fetch(
+                            `https://www.googleapis.com/gmail/v1/users/${emailAddress}/messages/${messageId}?format=full`,
+                            {
+                                headers: { 'Authorization': `Bearer ${accessToken}` },
+                            }
+                        );
+
+                        if (!messageResponse.ok) {
+                            console.error(`Error fetching message ${messageId}:`, await messageResponse.text());
+                            continue;
+                        }
+
+                        const messageData = await messageResponse.json();
+                        const headers = messageData.payload.headers;
+                        const subject = headers.find((h: any) => h.name === 'Subject')?.value || 'No Subject';
+                        const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown Sender';
+                        const threadId = messageData.threadId;
+
+                        // Attempt to get the plain text body
+                        let body = '';
+                        if (messageData.payload.parts) {
+                            const part = messageData.payload.parts.find((p: any) => p.mimeType === 'text/plain');
+                            if (part && part.body && part.body.data) {
+                                body = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                            }
+                        } else if (messageData.payload.body && messageData.payload.body.data) {
+                            body = atob(messageData.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                        }
+
+                        emails.push({
+                            id: messageId,
+                            subject: subject,
+                            from: from,
+                            body: body,
+                            thread_id: threadId,
+                        });
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Critical error in getNewEmails:', error.message);
+    }
+    return { emails, newHistoryId: currentHistoryId };
+}
 
 // async function getContextForCreator(creatorId: string): Promise<any> {
 //   // Récupérer les éléments de context_pool_items pour le créateur
